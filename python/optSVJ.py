@@ -18,6 +18,7 @@ options.register("rinv", 0.3, VarParsing.multiplicity.singleton, VarParsing.varT
 options.register("alpha", "peak", VarParsing.multiplicity.singleton, VarParsing.varType.string)
 options.register("yukawa", 1.0, VarParsing.multiplicity.singleton, VarParsing.varType.float)
 options.register("filterZ2", True, VarParsing.multiplicity.singleton, VarParsing.varType.bool)
+options.register("scout", False, VarParsing.multiplicity.singleton, VarParsing.varType.bool)
 options.register("part", 1, VarParsing.multiplicity.singleton, VarParsing.varType.int)
 options.register("indir", "", VarParsing.multiplicity.singleton, VarParsing.varType.string)
 options.register("inpre", "", VarParsing.multiplicity.singleton, VarParsing.varType.string)
