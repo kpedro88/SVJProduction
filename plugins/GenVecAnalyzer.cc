@@ -3,6 +3,7 @@
 #include "FWCore/Framework/interface/one/EDAnalyzer.h"
 #include "FWCore/Framework/interface/ESHandle.h"
 #include "FWCore/Framework/interface/Event.h"
+#include "FWCore/Framework/interface/LuminosityBlock.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Utilities/interface/StreamID.h"
@@ -20,6 +21,7 @@
 #include "DataFormats/Math/interface/deltaPhi.h"
 #include "DataFormats/Math/interface/deltaR.h"
 #include "DataFormats/Math/interface/LorentzVector.h"
+#include "SimDataFormats/GeneratorProducts/interface/GenLumiInfoHeader.h"
 
 //ROOT headers
 #include <TTree.h>
@@ -30,9 +32,24 @@
 #include <cmath>
 #include <iostream>
 #include <set>
+#include <map>
+#include <string>
+#include <sstream>
+#include <iomanip>
 using std::vector;
 
 typedef math::PtEtaPhiELorentzVector LorentzVector;
+
+namespace parse {
+	//generalization for processing a line
+	inline void process(const std::string& line, char delim, std::vector<std::string>& fields){
+		std::stringstream ss(line);
+		std::string field;
+		while(getline(ss,field,delim)){
+			fields.push_back(field);
+		}
+	}
+}
 
 double TransverseMass(double px1, double py1, double m1, double px2, double py2, double m2){
 	double E1 = sqrt(pow(px1,2)+pow(py1,2)+pow(m1,2));
@@ -41,7 +58,7 @@ double TransverseMass(double px1, double py1, double m1, double px2, double py2,
 	return sqrt(std::max(MTsq,0.0));
 }
 
-class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> {
+class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm::one::WatchLuminosityBlocks> {
 	public:
 		explicit GenVecAnalyzer(const edm::ParameterSet&);
 		~GenVecAnalyzer() {}
@@ -61,14 +78,23 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> {
 			double Mmc;
 			double Mjj;
 			double MT;
+			double mZprime;
+			double mDark;
+			double rinv;
+			double alpha;
 		};
 	
 	private:
 		void beginJob() override;
 		void doBeginRun_(const edm::Run&, const edm::EventSetup&) override {}
+		void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
 		void analyze(const edm::Event&, const edm::EventSetup&) override;
+		void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override {}
 		void doEndRun_(const edm::Run&, const edm::EventSetup&) override {}
 		void endJob() override {}
+
+		//helper
+		void getSVJComment(const GenLumiInfoHeader& gen);
 		
 		// ----------member data ---------------------------
 		edm::Service<TFileService> fs;
@@ -80,6 +106,8 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> {
 		edm::EDGetTokenT<vector<reco::GenMET>> tok_met;
 		edm::EDGetTokenT<vector<reco::GenJet>> tok_jet;
 		edm::EDGetTokenT<vector<reco::GenParticle>> tok_part;
+		edm::EDGetTokenT<GenLumiInfoHeader> tok_scan;
+		std::vector<double> signalParameters_;
 };
 
 //
@@ -89,7 +117,8 @@ GenVecAnalyzer::GenVecAnalyzer(const edm::ParameterSet& iConfig) :
 	tree(nullptr),
 	tok_met(consumes<vector<reco::GenMET>>(iConfig.getParameter<edm::InputTag>("METTag"))),
 	tok_jet(consumes<vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("JetTag"))),
-	tok_part(consumes<vector<reco::GenParticle>>(iConfig.getParameter<edm::InputTag>("PartTag")))
+	tok_part(consumes<vector<reco::GenParticle>>(iConfig.getParameter<edm::InputTag>("PartTag"))),
+	tok_scan(consumes<GenLumiInfoHeader,edm::InLumi>(edm::InputTag("generator")))
 {
 	usesResource("TFileService");
 }
@@ -114,6 +143,47 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Mmc", &entry.Mmc, "Mmc/D");
 	tree->Branch("Mjj", &entry.Mjj, "Mjj/D");
 	tree->Branch("MT", &entry.MT, "MT/D");
+	tree->Branch("mZprime", &entry.mZprime, "mZprime/D");
+	tree->Branch("mDark", &entry.mDark, "mDark/D");
+	tree->Branch("rinv", &entry.rinv, "rinv/D");
+	tree->Branch("alpha", &entry.alpha, "alpha/D");
+}
+
+//parse GenLumiInfo for SVJ
+//from https://github.com/TreeMaker/TreeMaker/blob/Run2_2017/Utils/src/SignalScanProducer.cc
+void GenVecAnalyzer::getSVJComment(const GenLumiInfoHeader& gen){
+	signalParameters_.clear();
+
+	const std::map<std::string,double> alpha_vals{
+		{"peak",-2.},
+		{"high",-1.},
+		{"low",-3.},
+	};
+	const std::string& model = gen.configDescription();
+	if(model.empty()) return;
+	std::vector<std::string> fields;
+	parse::process(model,'_',fields);
+
+	//format: SVJ_s-channel_mZprime-X_mDark-Y_rinv-Z_alpha-W
+	for(const auto& f : fields){
+		std::vector<std::string> subfields;
+		parse::process(f,'-',subfields);
+		if(subfields.size()!=2 or subfields[0]=="s") continue;
+		double val = 0.;
+		if(subfields[0]=="alpha") val = alpha_vals.at(subfields[1]);
+		else {
+			std::stringstream sval(subfields[1]);
+			sval >> val;
+		}
+		signalParameters_.push_back(val);
+	}
+}
+
+void GenVecAnalyzer::beginLuminosityBlock(edm::LuminosityBlock const& iLumi, edm::EventSetup const& iSetup)
+{
+	edm::Handle<GenLumiInfoHeader> gen_header;
+	iLumi.getByToken(tok_scan, gen_header);
+	getSVJComment(*gen_header);
 }
 
 // ------------ method called on each new Event  ------------
@@ -170,6 +240,20 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.Mmc = (vjj + entry.Invis1 + entry.Invis2).mass();
 	entry.Mjj = vjj.mass();
 	entry.MT = TransverseMass(vjj.px(),vjj.py(),vjj.mass(),entry.Met.px(),entry.Met.py(),0.0);
+
+	//check signal scan info
+	if(!signalParameters_.empty()){
+		entry.mZprime = signalParameters_[0];
+		entry.mDark = signalParameters_[1];
+		entry.rinv = signalParameters_[2];
+		entry.alpha = signalParameters_[3];
+	}
+	else {
+		entry.mZprime = 0.;
+		entry.mDark = 0.;
+		entry.rinv = 0.;
+		entry.alpha = 0.;
+	}
 	
 	//fill tree
 	tree->Fill();
