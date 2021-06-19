@@ -14,7 +14,7 @@ _outname += ".root"
 _inname = ""
 if len(options.inpre)>0:
     _inname = _outname.replace("outpre",options.inpre)
-    if options.maxEvents!=options.maxEventsIn: _inname = _inname.replace("_n-{}_".format(options.maxEvents),"_n-{}_".format(options.maxEventsIn),1)
+    if options.maxEvents!=options.maxEventsIn: _inname = _inname.replace("_n-{:g}_".format(options.maxEvents),"_n-{:g}_".format(options.maxEventsIn),1)
 
 def fix_inname(inname,options,lhe=False):
     if len(options.indir)>0: inname = options.indir+"/"+inname
