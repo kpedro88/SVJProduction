@@ -74,6 +74,9 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			LorentzVector Invis1;
 			LorentzVector Invis2;
 			LorentzVector Met;
+			int Ninv;
+			int Ninv1;
+			int Ninv2;
 			double Mdq;
 			double Mmc;
 			double Mjj;
@@ -139,6 +142,9 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Invis1", "Invis1", &entry.Invis1, 32000, 99);
 	tree->Branch("Invis2", "Invis2", &entry.Invis2, 32000, 99);
 	tree->Branch("Met", "Met", &entry.Met, 32000, 99);
+	tree->Branch("Ninv", &entry.Ninv, "Ninv/I");
+	tree->Branch("Ninv1", &entry.Ninv1, "Ninv1/I");
+	tree->Branch("Ninv2", &entry.Ninv2, "Ninv2/I");
 	tree->Branch("Mdq", &entry.Mdq, "Mdq/D");
 	tree->Branch("Mmc", &entry.Mmc, "Mmc/D");
 	tree->Branch("Mjj", &entry.Mjj, "Mjj/D");
@@ -210,13 +216,23 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 
 	const double jet_radius = 0.8;
 	const std::set<int> stable_ids{51,52,53};
+	entry.Ninv = 0;
+	entry.Ninv1 = 0;
+	entry.Ninv2 = 0;
 	for(const auto& i_part : *(h_part.product())){
 		if(i_part.numberOfDaughters()>0 and stable_ids.find(std::abs(i_part.daughter(0)->pdgId()))!=stable_ids.end()){
+			++entry.Ninv;
 			double dr1 = 1e10, dr2 = 1e10;
 			if(jet_counter>0) dr1 = reco::deltaR(entry.Jet1,i_part.p4());
 			if(jet_counter>1) dr2 = reco::deltaR(entry.Jet2,i_part.p4());
-			if(dr1 < dr2 and dr1 < jet_radius) entry.Invis1 += i_part.p4();
-			else if(dr2 < dr1 and dr2 < jet_radius) entry.Invis2 += i_part.p4();
+			if(dr1 < dr2 and dr1 < jet_radius){
+				entry.Invis1 += i_part.p4();
+				++entry.Ninv1;
+			}
+			else if(dr2 < dr1 and dr2 < jet_radius){
+				entry.Invis2 += i_part.p4();
+				++entry.Ninv2;
+			}
 		}
 	}
 
