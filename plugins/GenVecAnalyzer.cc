@@ -38,7 +38,11 @@
 #include <iomanip>
 using std::vector;
 
+//user headers
+#include "SVJ/Production/interface/lester_mt2_bisect.h"
+
 typedef math::PtEtaPhiELorentzVector LorentzVector;
+typedef math::XYZTLorentzVector LorentzVector2;
 
 namespace parse {
 	//generalization for processing a line
@@ -86,6 +90,10 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			double Mmc;
 			double Mjj;
 			double MT;
+			double MT2;
+			double MAOS;
+			LorentzVector Met1;
+			LorentzVector Met2;
 			double mZprime;
 			double mDark;
 			double rinv;
@@ -137,6 +145,8 @@ GenVecAnalyzer::GenVecAnalyzer(const edm::ParameterSet& iConfig) :
 
 void GenVecAnalyzer::beginJob()
 {
+	asymm_mt2_lester_bisect::disableCopyrightMessage();
+
 	tree = fs->make<TTree>("tree","tree");
 	
 	tree->Branch("Zprime", "Zprime", &entry.Zprime, 32000, 99);
@@ -159,6 +169,10 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Mmc", &entry.Mmc, "Mmc/D");
 	tree->Branch("Mjj", &entry.Mjj, "Mjj/D");
 	tree->Branch("MT", &entry.MT, "MT/D");
+	tree->Branch("MT2", &entry.MT2, "MT2/D");
+	tree->Branch("MAOS", &entry.MAOS, "MAOS/D");
+	tree->Branch("Met1", "Met1", &entry.Met1, 32000, 99);
+	tree->Branch("Met2", "Met2", &entry.Met2, 32000, 99);
 	tree->Branch("mZprime", &entry.mZprime, "mZprime/D");
 	tree->Branch("mDark", &entry.mDark, "mDark/D");
 	tree->Branch("rinv", &entry.rinv, "rinv/D");
@@ -287,6 +301,40 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.Mmc = (vjj + entry.Invis1 + entry.Invis2).mass();
 	entry.Mjj = vjj.mass();
 	entry.MT = TransverseMass(vjj.px(),vjj.py(),vjj.mass(),entry.Met.px(),entry.Met.py(),0.0);
+
+	//compute MT2 and MAOS
+	double METx = i_met.px();
+	double METy = i_met.py();
+	entry.MT2 = asymm_mt2_lester_bisect::get_mT2(
+		entry.Jet1.mass(), entry.Jet1.px(), entry.Jet1.py(),
+		entry.Jet2.mass(), entry.Jet2.px(), entry.Jet2.py(),
+		METx, METy, 0.0, 0.0, 0
+	);
+	//get invisible systems from MT2
+	auto MET1 = asymm_mt2_lester_bisect::ben_findsols(entry.MT2,
+		entry.Jet1.px(), entry.Jet1.py(), entry.Jet1.mass(), 0.0,
+		entry.Jet2.px(), entry.Jet2.py(),
+		METx, METy, entry.Jet2.mass(), 0.0
+	);
+	double MET1x = MET1.first;
+	double MET1y = MET1.second;
+	double MET1t = std::sqrt(std::pow(MET1x,2)+std::pow(MET1y,2));
+	double MET2x = METx - MET1x;
+	double MET2y = METy - MET1y;
+	double MET2t = std::sqrt(std::pow(MET2x,2)+std::pow(MET2y,2));
+
+	//use MAOS scheme 2 ("modified") to estimate longitudinal momenta of invisible systems
+	double MET1z = MET1t*entry.Jet1.Pz()/entry.Jet1.Pt();
+	double MET2z = MET2t*entry.Jet2.Pz()/entry.Jet2.Pt();
+
+	//MAOS scheme 2 assumes met is massless: E = p
+	LorentzVector2 tmp1(MET1x,MET1y,MET1z,std::sqrt(MET1t*MET1t+MET1z*MET1z));
+	entry.Met1 = LorentzVector(tmp1.pt(),tmp1.eta(),tmp1.phi(),tmp1.energy());
+	LorentzVector2 tmp2(MET2x,MET2y,MET2z,std::sqrt(MET2t*MET2t+MET2z*MET2z));
+	entry.Met2 = LorentzVector(tmp2.pt(),tmp2.eta(),tmp2.phi(),tmp2.energy());
+
+	//construct invariant mass of parent
+	entry.MAOS = (entry.Jet1+entry.Jet2+entry.Met1+entry.Met2).mass();
 
 	//check signal scan info
 	if(!signalParameters_.empty()){
