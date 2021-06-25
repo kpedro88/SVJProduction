@@ -77,6 +77,11 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			int Ninv;
 			int Ninv1;
 			int Ninv2;
+			int Nvis;
+			int Nvis1;
+			int Nvis2;
+			int Nconst1;
+			int Nconst2;
 			double Mdq;
 			double Mmc;
 			double Mjj;
@@ -145,6 +150,11 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Ninv", &entry.Ninv, "Ninv/I");
 	tree->Branch("Ninv1", &entry.Ninv1, "Ninv1/I");
 	tree->Branch("Ninv2", &entry.Ninv2, "Ninv2/I");
+	tree->Branch("Nvis", &entry.Nvis, "Nvis/I");
+	tree->Branch("Nvis1", &entry.Nvis1, "Nvis1/I");
+	tree->Branch("Nvis2", &entry.Nvis2, "Nvis2/I");
+	tree->Branch("Nconst1", &entry.Nconst1, "Nconst1/I");
+	tree->Branch("Nconst2", &entry.Nconst2, "Nconst2/I");
 	tree->Branch("Mdq", &entry.Mdq, "Mdq/D");
 	tree->Branch("Mmc", &entry.Mmc, "Mmc/D");
 	tree->Branch("Mjj", &entry.Mjj, "Mjj/D");
@@ -206,32 +216,53 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	edm::Handle<vector<reco::GenParticle>> h_part;
 	iEvent.getByToken(tok_part,h_part);
 
-	int jet_counter = 0;	
+	int jet_counter = 0;
+	entry.Nconst1 = 0;
+	entry.Nconst2 = 0;
 	for(const auto& i_jet : *(h_jet.product())){
-		if(jet_counter==0) entry.Jet1 = i_jet.p4();
-		else if(jet_counter==1) entry.Jet2 = i_jet.p4();
+		if(jet_counter==0){
+			entry.Jet1 = i_jet.p4();
+			entry.Nconst1 = i_jet.numberOfDaughters();
+		}
+		else if(jet_counter==1){
+			entry.Jet2 = i_jet.p4();
+			entry.Nconst2 = i_jet.numberOfDaughters();
+		}
 		else break;
 		++jet_counter;
 	}
 
 	const double jet_radius = 0.8;
+	const std::set<int> darkhadron_ids{4900111,4900113,4900211,4900213};
 	const std::set<int> stable_ids{51,52,53};
 	entry.Ninv = 0;
 	entry.Ninv1 = 0;
 	entry.Ninv2 = 0;
+	entry.Nvis = 0;
+	entry.Nvis1 = 0;
+	entry.Nvis2 = 0;
 	for(const auto& i_part : *(h_part.product())){
-		if(i_part.numberOfDaughters()>0 and stable_ids.find(std::abs(i_part.daughter(0)->pdgId()))!=stable_ids.end()){
-			++entry.Ninv;
+		//todo: for unstable dark hadrons, can actually make list of all that produced genjet constituents
+		if(darkhadron_ids.find(std::abs(i_part.pdgId()))!=darkhadron_ids.end() and i_part.numberOfDaughters()>0){
+			bool invis = stable_ids.find(std::abs(i_part.daughter(0)->pdgId()))!=stable_ids.end();
+			if(invis) ++entry.Ninv;
+			else ++entry.Nvis;
 			double dr1 = 1e10, dr2 = 1e10;
 			if(jet_counter>0) dr1 = reco::deltaR(entry.Jet1,i_part.p4());
 			if(jet_counter>1) dr2 = reco::deltaR(entry.Jet2,i_part.p4());
 			if(dr1 < dr2 and dr1 < jet_radius){
-				entry.Invis1 += i_part.p4();
-				++entry.Ninv1;
+				if(invis){
+					entry.Invis1 += i_part.p4();
+					++entry.Ninv1;
+				}
+				else ++entry.Nvis1;
 			}
 			else if(dr2 < dr1 and dr2 < jet_radius){
-				entry.Invis2 += i_part.p4();
-				++entry.Ninv2;
+				if(invis){
+					entry.Invis2 += i_part.p4();
+					++entry.Ninv2;
+				}
+				else ++entry.Nvis2;
 			}
 		}
 	}
