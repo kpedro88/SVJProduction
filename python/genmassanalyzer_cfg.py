@@ -39,9 +39,9 @@ process.ak8GenJetsNoNuSoftDrop = ak8GenJetsNoNu.clone(
 process.packedGenJetsAK8NoNu = cms.EDProducer("GenJetSubstructurePacker",
     jetSrc = cms.InputTag("ak8GenJetsNoNuArea"),
     distMax = cms.double(0.8),
-    algoTags = cms.VInputTag(
-        cms.InputTag("ak8GenJetsNoNuSoftDrop"),
-    ),
+    algoTag = cms.InputTag("ak8GenJetsNoNuSoftDrop"),
+    algoFloatLabels = cms.vstring(),
+    algoFloatTags = cms.VInputTag(),
 )
 
 # Path and EndPath definitions

@@ -746,7 +746,7 @@ void GenMassAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descripti
   edm::ParameterSetDescription desc;
   desc.add<edm::InputTag>("PackedJetTag",edm::InputTag("packedGenJetsAK8NoNu"));
   desc.add<edm::InputTag>("METTag",edm::InputTag("genMetTrue"));
-  desc.add<edm::InputTag>("JetTag",edm::InputTag("ak8GenJets"));
+  desc.add<edm::InputTag>("JetTag",edm::InputTag("ak8GenJetsNuDark"));
   desc.add<edm::InputTag>("PartTag",edm::InputTag("genParticles"));
 
   edm::ParameterSetDescription desc_nj;
