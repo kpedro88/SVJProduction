@@ -135,7 +135,7 @@ class jobSubmitterSVJ(jobSubmitter):
                 if self.suep:
                     self.helper.setModel(pdict["mMediator"],pdict["mDark"],pdict["temperature"],pdict["decay"])
                 else:
-                    self.helper.setModel(pdict["channel"],pdict["mMediator"],pdict["mDark"],pdict["rinv"],pdict["alpha"],boost=pdict["boost"] if "boost" in pdict else 0.0,generate=not (self.madgraph or self.gridpack),yukawa=pdict["yukawa"] if "yukawa" in pdict else None)
+                    self.helper.setModel(pdict["channel"],pdict["mMediator"],pdict["mDark"],pdict["rinv"],pdict["alpha"],boost=pdict["boost"] if "boost" in pdict else 0.0,generate=not (self.madgraph or self.gridpack),yukawa=pdict["yukawa"] if "yukawa" in pdict else None,width=pdict["width"] if "width" in pdict else 0)
                 outpre = self.outpre
                 inpre = self.inpre
                 signal = True
@@ -184,6 +184,7 @@ class jobSubmitterSVJ(jobSubmitter):
                             "alpha="+str(pdict["alpha"]),
                             "boost="+str(pdict["boost"] if "boost" in pdict else 0.0),
                             "yukawa="+str(pdict["yukawa"] if "yukawa" in pdict else 0.0),
+                            "width="+str(pdict["width"] if "width" in pdict else 0.0),
                         ]
                     arglist.extend([
                         "maxEvents="+str(self.maxEvents),
