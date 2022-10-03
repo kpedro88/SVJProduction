@@ -79,7 +79,9 @@ if options.signal:
                 process.generator.PythiaParameters.JetMatchingParameters = cms.vstring(_helper.getJetMatchSettings())
             if options.suep:
                 process.generator.suep = _helper.getHookSettings()
-
+        # analyzer settings
+        if hasattr(process,'GenVecAnalyzer'):
+            process.GenVecAnalyzer.model = cms.string(_outname.replace("outpre","SVJ"))
     # gen filter settings
     # pythia implementation of model has 4900111/211 -> -51 51 and 4900113/213 -> -53 53
     # this is a stand-in for direct production of a single stable dark meson in the hadronization

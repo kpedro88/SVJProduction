@@ -111,6 +111,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 
 		//helper
 		void getSVJComment(const GenLumiInfoHeader& gen);
+		void getSVJComment(const std::string& model);
 		
 		// ----------member data ---------------------------
 		edm::Service<TFileService> fs;
@@ -123,7 +124,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 		edm::EDGetTokenT<vector<reco::GenJet>> tok_jet;
 		edm::EDGetTokenT<vector<reco::GenParticle>> tok_part;
 		edm::EDGetTokenT<GenLumiInfoHeader> tok_scan;
-		std::vector<double> signalParameters_;
+		std::map<std::string,double> signalParameters_;
 };
 
 //
@@ -137,6 +138,8 @@ GenVecAnalyzer::GenVecAnalyzer(const edm::ParameterSet& iConfig) :
 	tok_scan(consumes<GenLumiInfoHeader,edm::InLumi>(edm::InputTag("generator")))
 {
 	usesResource("TFileService");
+	const auto& model = iConfig.getParameter<std::string>("model");
+	if(!model.empty()) getSVJComment(model);
 }
 
 //
@@ -182,6 +185,12 @@ void GenVecAnalyzer::beginJob()
 //parse GenLumiInfo for SVJ
 //from https://github.com/TreeMaker/TreeMaker/blob/Run2_2017/Utils/src/SignalScanProducer.cc
 void GenVecAnalyzer::getSVJComment(const GenLumiInfoHeader& gen){
+	const std::string& model = gen.configDescription();
+	if(model.empty()) return;
+	getSVJComment(model);
+}
+
+void GenVecAnalyzer::getSVJComment(const std::string& model){
 	signalParameters_.clear();
 
 	const std::map<std::string,double> alpha_vals{
@@ -189,23 +198,21 @@ void GenVecAnalyzer::getSVJComment(const GenLumiInfoHeader& gen){
 		{"high",-1.},
 		{"low",-3.},
 	};
-	const std::string& model = gen.configDescription();
-	if(model.empty()) return;
 	std::vector<std::string> fields;
 	parse::process(model,'_',fields);
 
-	//format: SVJ_s-channel_mZprime-X_mDark-Y_rinv-Z_alpha-W
+	//format 1: SVJ_s-channel_mMed-X_mDark-Y_rinv-Z_alpha-W
 	for(const auto& f : fields){
 		std::vector<std::string> subfields;
 		parse::process(f,'-',subfields);
-		if(subfields.size()!=2 or subfields[0]=="s") continue;
+		if(subfields.size()!=2 or subfields[0].size()==1) continue;
 		double val = 0.;
 		if(subfields[0]=="alpha") val = alpha_vals.at(subfields[1]);
 		else {
 			std::stringstream sval(subfields[1]);
 			sval >> val;
 		}
-		signalParameters_.push_back(val);
+		signalParameters_[subfields[0]] = val;
 	}
 }
 
@@ -338,10 +345,10 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 
 	//check signal scan info
 	if(!signalParameters_.empty()){
-		entry.mZprime = signalParameters_[0];
-		entry.mDark = signalParameters_[1];
-		entry.rinv = signalParameters_[2];
-		entry.alpha = signalParameters_[3];
+		entry.mZprime = signalParameters_["mMed"];
+		entry.mDark = signalParameters_["mDark"];
+		entry.rinv = signalParameters_["rinv"];
+		entry.alpha = signalParameters_["alpha"];
 	}
 	else {
 		entry.mZprime = 0.;
@@ -360,6 +367,7 @@ void GenVecAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descriptio
 	desc.add<edm::InputTag>("METTag",edm::InputTag("genMetTrue"));
 	desc.add<edm::InputTag>("JetTag",edm::InputTag("ak8GenJetsNoNu"));
 	desc.add<edm::InputTag>("PartTag",edm::InputTag("genParticles"));
+	desc.add<std::string>("model","");
 	
 	descriptions.add("GenVecAnalyzer",desc);
 }
