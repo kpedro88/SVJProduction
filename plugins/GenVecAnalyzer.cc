@@ -320,9 +320,11 @@ void GenVecAnalyzer::firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM
 			for(unsigned i = 0; i < part->numberOfDaughters(); i++){
 				CandPtr dau = part->daughter(i);
 				if (isParticle(DarkTMediatorIDs_,dau)){
-					firstMd.insert(dau);
-					// once a mediator daughter is found, we look for the descendants of the mediator
-					medDecay(dau,firstQdM1,firstQdM2,firstQsM1,firstQsM2,secondDM,secondSM);
+					if(firstMd.find(dau)==firstMd.end()){
+						firstMd.insert(dau);
+						// once a mediator daughter is found, we look for the descendants of the mediator
+						medDecay(dau,firstQdM1,firstQdM2,firstQsM1,firstQsM2,secondDM,secondSM);
+					}
 				}
 			}
 		}
