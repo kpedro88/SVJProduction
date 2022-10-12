@@ -388,7 +388,7 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     //naming scheme: dark particles Pd, SM particles Ps; P = D (generic daughters), Q (quarks), G (gluons), M (mediators)
     CandSet firstMd;
     CandPtr firstQdM1, firstQdM2, firstQsM1, firstQsM2;
-    bool secondDM = false, secondSM = false, manyParticlesPerJet = false;
+    bool secondDM = false, secondSM = false;
     std::vector<const reco::GenJet*> dQM1Js,dQM2Js,SMM1Js,SMM2Js;
     int nJets = 0;
 
@@ -430,19 +430,27 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	}
 
 	//t-channel loop over gen jets
+	vector<CandPtr> firsts{firstQdM1,firstQdM2,firstQsM1,firstQsM2};
+	vector<std::vector<const reco::GenJet*>*> Js{&dQM1Js,&dQM2Js,&SMM1Js,&SMM2Js};
 	for(const auto& i_jet : *(h_jet.product())){
 		nJets ++;
 		// t-channel MT2 Right Combination
 		if(firstMd.size()==2){
 			int t_MT2JetID = 0;
-			int nPartPerJet1 = 0;
-			int nPartPerJet2 = 0;
-			matchPFMtoJet(firstQdM1,dQM1Js,i_jet,nPartPerJet1,t_MT2JetID,1);
-			matchPFMtoJet(firstQdM2,dQM2Js,i_jet,nPartPerJet2,t_MT2JetID,2);
-			matchPFMtoJet(firstQsM1,SMM1Js,i_jet,nPartPerJet1,t_MT2JetID,3);
-			matchPFMtoJet(firstQsM2,SMM2Js,i_jet,nPartPerJet2,t_MT2JetID,4);
+			int min_index = -1;
+			double min_val = 1e10;
+			for(unsigned f = 0; f < firsts.size(); ++f){
+				double dR = reco::deltaR(i_jet,*firsts[f]);
+				if(dR < min_val){
+					min_val = dR;
+					min_index = f;
+				}
+			}
+			if(min_val<coneSize_){
+				Js[min_index]->push_back(&i_jet);
+				t_MT2JetID = min_index+1;
+			}
 			entry.PairMT2ID.push_back(t_MT2JetID);
-			if(nPartPerJet1 >= 1 and nPartPerJet2 >= 1) manyParticlesPerJet = true;
 		}
 	}
 
@@ -491,11 +499,16 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.MAOS = (entry.Jet1+entry.Jet2+entry.Met1+entry.Met2).mass();
 
 	//compute MT2 for t-channel (paired jets)
-	bool manyJetsPerParticle = dQM1Js.size() >= 1 && dQM2Js.size() >= 1 && SMM1Js.size() >= 1 && SMM2Js.size() >= 1;
-	if(manyJetsPerParticle and !manyParticlesPerJet){
+	bool geqOneJet1 = dQM1Js.size() >= 1 or SMM1Js.size() >= 1;
+	bool geqOneJet2 = dQM2Js.size() >= 1 or SMM2Js.size() >= 1;
+	if(geqOneJet1 and geqOneJet2){
 		// using the highest pT jet if more than one jet contains the same particle
-		auto FJet0 = dQM1Js[0]->p4() + SMM1Js[0]->p4();
-		auto FJet1 = dQM2Js[0]->p4() + SMM2Js[0]->p4();
+		LorentzVector FJet0;
+		if(!dQM1Js.empty()) FJet0 += dQM1Js[0]->p4();
+		if(!SMM1Js.empty()) FJet0 += SMM1Js[0]->p4();
+		LorentzVector FJet1;
+		if(!dQM2Js.empty()) FJet1 += dQM2Js[0]->p4();
+		if(!SMM2Js.empty()) FJet1 += SMM2Js[0]->p4();
 		entry.PairMT2 = asymm_mt2_lester_bisect::get_mT2(
 			FJet0.M(), FJet0.Px(), FJet0.Py(),
 			FJet1.M(), FJet1.Px(), FJet1.Py(),
@@ -505,7 +518,7 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	else
 	{
 		entry.PairMT2ID = std::vector<int>(nJets,0);
-		entry.PairMT2 = (!manyJetsPerParticle and manyParticlesPerJet) ? 0 : (!manyJetsPerParticle ? -1 : -2);
+		entry.PairMT2 = (!geqOneJet1 and !geqOneJet2) ? 0 : (!geqOneJet1 ? -1 : -2);
 	}
 
 	//"reco-level" MT2: find pairs of jets with most similar invariant mass values
