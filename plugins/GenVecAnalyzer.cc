@@ -435,13 +435,14 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 		// t-channel MT2 Right Combination
 		if(firstMd.size()==2){
 			int t_MT2JetID = 0;
-			int nPartPerJet = 0;
-			matchPFMtoJet(firstQdM1,dQM1Js,i_jet,nPartPerJet,t_MT2JetID,1);
-			matchPFMtoJet(firstQdM2,dQM2Js,i_jet,nPartPerJet,t_MT2JetID,2);
-			matchPFMtoJet(firstQsM1,SMM1Js,i_jet,nPartPerJet,t_MT2JetID,3);
-			matchPFMtoJet(firstQsM2,SMM2Js,i_jet,nPartPerJet,t_MT2JetID,4);
+			int nPartPerJet1 = 0;
+			int nPartPerJet2 = 0;
+			matchPFMtoJet(firstQdM1,dQM1Js,i_jet,nPartPerJet1,t_MT2JetID,1);
+			matchPFMtoJet(firstQdM2,dQM2Js,i_jet,nPartPerJet2,t_MT2JetID,2);
+			matchPFMtoJet(firstQsM1,SMM1Js,i_jet,nPartPerJet1,t_MT2JetID,3);
+			matchPFMtoJet(firstQsM2,SMM2Js,i_jet,nPartPerJet2,t_MT2JetID,4);
 			entry.PairMT2ID.push_back(t_MT2JetID);
-			if(nPartPerJet > 1) manyParticlesPerJet = true;
+			if(nPartPerJet1 >= 1 and nPartPerJet2 >= 1) manyParticlesPerJet = true;
 		}
 	}
 
