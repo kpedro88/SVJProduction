@@ -133,7 +133,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 		bool isParticle(const PidSet& darkList, int pid) const;
 		void firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) const;
 		void medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) const;
-		void matchPFMtoJet(CandPtr part, std::vector<const reco::GenJet*>& matchedJets, const reco::GenJet& jet, int& nPartPerJet, int& t_MT2JetID, int mt2ID) const;
+		std::vector<int> matchJetPart(const vector<reco::GenJet>& jets, const vector<CandPtr>& parts) const;
 
 		// ----------member data ---------------------------
 		edm::Service<TFileService> fs;
@@ -330,13 +330,29 @@ void GenVecAnalyzer::firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM
 }
 
 // match particles from mediator to jets
-void GenVecAnalyzer::matchPFMtoJet(CandPtr part, std::vector<const reco::GenJet*>& matchedJets, const reco::GenJet& jet, int& nPartPerJet, int& t_MT2JetID, int mt2ID) const {
-  if(reco::deltaR(jet,*part) < coneSize_)
-  {
-    matchedJets.push_back(&jet);
-    nPartPerJet ++;
-    t_MT2JetID = mt2ID;
+//based on official JetMET matching procedure: equiv to set<DR,jet_index,gen_index> sorted by DR
+//from https://github.com/cms-jet/JetMETAnalysis/blob/master/JetUtilities/plugins/MatchRecToGen.cc
+std::vector<int> GenVecAnalyzer::matchJetPart(const vector<reco::GenJet>& jets, const vector<CandPtr>& parts) const {
+  std::map<double,std::pair<unsigned,unsigned>> matchMap;
+  for(unsigned j = 0; j < jets.size(); ++j){
+    for(unsigned p = 0; p < parts.size(); ++p){
+      matchMap.emplace(std::piecewise_construct, std::forward_as_tuple(reco::deltaR(jets[j],*parts[p])), std::forward_as_tuple(j,p));
+    }
   }
+
+  std::vector<int> jetIndex(parts.size(),-1);
+  std::unordered_set<unsigned> j_used, p_used;
+  for(const auto& matchItem: matchMap){
+    unsigned j = matchItem.second.first;
+    unsigned p = matchItem.second.second;
+    if(j_used.find(j)==j_used.end() and p_used.find(p)==p_used.end()){
+      jetIndex[p] = j;
+      j_used.insert(j);
+      p_used.insert(p);
+    }
+  }
+
+  return jetIndex;
 }
 
 // ------------ method called on each new Event  ------------
@@ -390,7 +406,6 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     CandPtr firstQdM1, firstQdM2, firstQsM1, firstQsM2;
     bool secondDM = false, secondSM = false;
     std::vector<const reco::GenJet*> dQM1Js,dQM2Js,SMM1Js,SMM2Js;
-    int nJets = 0;
 
 	for(const auto& i_part : *(h_part.product())){
 		//todo: for unstable dark hadrons, can actually make list of all that produced genjet constituents
@@ -431,27 +446,16 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 
 	//t-channel loop over gen jets
 	vector<CandPtr> firsts{firstQdM1,firstQdM2,firstQsM1,firstQsM2};
-	vector<std::vector<const reco::GenJet*>*> Js{&dQM1Js,&dQM2Js,&SMM1Js,&SMM2Js};
-	for(const auto& i_jet : *(h_jet.product())){
-		nJets ++;
-		// t-channel MT2 Right Combination
-		if(firstMd.size()==2){
-			int t_MT2JetID = 0;
-			int min_index = -1;
-			double min_val = 1e10;
-			for(unsigned f = 0; f < firsts.size(); ++f){
-				double dR = reco::deltaR(i_jet,*firsts[f]);
-				if(dR < min_val){
-					min_val = dR;
-					min_index = f;
-				}
-			}
-			if(min_val<coneSize_){
-				Js[min_index]->push_back(&i_jet);
-				t_MT2JetID = min_index+1;
-			}
-			entry.PairMT2ID.push_back(t_MT2JetID);
+	vector<int> jetIndex(firsts.size(),-1);
+	if(firstMd.size()==2){
+		jetIndex = matchJetPart(*(h_jet.product()),firsts);
+		entry.PairMT2ID = vector<int>(h_jet->size(),0);
+		for(unsigned p = 0; p < jetIndex.size(); ++p){
+			if(jetIndex[p]>-1) entry.PairMT2ID[jetIndex[p]] = p+1;
 		}
+	}
+	else {
+		entry.PairMT2ID = std::vector<int>(h_jet->size(),0);
 	}
 
 	const auto& i_met = h_met->front();
@@ -499,16 +503,16 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.MAOS = (entry.Jet1+entry.Jet2+entry.Met1+entry.Met2).mass();
 
 	//compute MT2 for t-channel (paired jets)
-	bool geqOneJet1 = dQM1Js.size() >= 1 or SMM1Js.size() >= 1;
-	bool geqOneJet2 = dQM2Js.size() >= 1 or SMM2Js.size() >= 1;
+	bool geqOneJet1 = jetIndex[0] >= 0 or jetIndex[2] >= 0;
+	bool geqOneJet2 = jetIndex[1] >= 0 or jetIndex[3] >= 0;
 	if(geqOneJet1 and geqOneJet2){
 		// using the highest pT jet if more than one jet contains the same particle
 		LorentzVector FJet0;
-		if(!dQM1Js.empty()) FJet0 += dQM1Js[0]->p4();
-		if(!SMM1Js.empty()) FJet0 += SMM1Js[0]->p4();
+		if(jetIndex[0] >= 0) FJet0 += h_jet->at(jetIndex[0]).p4();
+		if(jetIndex[2] >= 0) FJet0 += h_jet->at(jetIndex[2]).p4();
 		LorentzVector FJet1;
-		if(!dQM2Js.empty()) FJet1 += dQM2Js[0]->p4();
-		if(!SMM2Js.empty()) FJet1 += SMM2Js[0]->p4();
+		if(jetIndex[1] >= 0) FJet1 += h_jet->at(jetIndex[1]).p4();
+		if(jetIndex[3] >= 0) FJet1 += h_jet->at(jetIndex[3]).p4();
 		entry.PairMT2 = asymm_mt2_lester_bisect::get_mT2(
 			FJet0.M(), FJet0.Px(), FJet0.Py(),
 			FJet1.M(), FJet1.Px(), FJet1.Py(),
@@ -517,7 +521,6 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	}
 	else
 	{
-		entry.PairMT2ID = std::vector<int>(nJets,0);
 		entry.PairMT2 = (!geqOneJet1 and !geqOneJet2) ? 0 : (!geqOneJet1 ? -1 : -2);
 	}
 
