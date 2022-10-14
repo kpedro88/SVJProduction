@@ -77,7 +77,10 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			LorentzVector Zprime;
 			LorentzVector DarkQuark1;
 			LorentzVector DarkQuark2;
-			vector<LorentzVector> Mediators;
+			LorentzVector Mediator1;
+			LorentzVector Mediator2;
+			LorentzVector SMQuark1;
+			LorentzVector SMQuark2;
 			LorentzVector Jet1;
 			LorentzVector Jet2;
 			LorentzVector Jet3;
@@ -131,8 +134,8 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 		bool isParticle(const PidSet& darkList, const reco::GenParticle& part) const;
 		bool isParticle(const PidSet& darkList, CandPtr part) const;
 		bool isParticle(const PidSet& darkList, int pid) const;
-		void firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) const;
-		void medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) const;
+		void firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM);
+		void medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM);
 		std::vector<int> matchJetPart(const vector<reco::GenJet>& jets, const vector<CandPtr>& parts) const;
 
 		// ----------member data ---------------------------
@@ -191,7 +194,10 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Zprime", "Zprime", &entry.Zprime, 32000, 99);
 	tree->Branch("DarkQuark1", "DarkQuark1", &entry.DarkQuark1, 32000, 99);
 	tree->Branch("DarkQuark2", "DarkQuark2", &entry.DarkQuark2, 32000, 99);
-	tree->Branch("Mediators", "Mediators", &entry.Mediators, 32000, 99);
+	tree->Branch("Mediator1", "Mediator1", &entry.Mediator1, 32000, 99);
+	tree->Branch("Mediator2", "Mediator2", &entry.Mediator2, 32000, 99);
+	tree->Branch("SMQuark1", "SMQuark1", &entry.SMQuark1, 32000, 99);
+	tree->Branch("SMQuark2", "SMQuark2", &entry.SMQuark2, 32000, 99);
 	tree->Branch("Jet1", "Jet1", &entry.Jet1, 32000, 99);
 	tree->Branch("Jet2", "Jet2", &entry.Jet2, 32000, 99);
 	tree->Branch("Jet3", "Jet3", &entry.Jet3, 32000, 99);
@@ -282,7 +288,7 @@ bool GenVecAnalyzer::isParticle(const PidSet& darkList, int pid) const {
 }
 
 // this function intends to collect immediate non-mediator daughters of the mediators. These mediator daughters can then be used to reconstruct the mass of the mediator.
-void GenVecAnalyzer::medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) const {
+void GenVecAnalyzer::medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) {
 	for(unsigned i = 0; i < part->numberOfDaughters(); i++){
 		CandPtr dau = part->daughter(i);
 		// if the first dark mediator's daughter is still a dark mediator, then check the daughters of this daughter dark mediator until we get daughters that are not dark mediator
@@ -293,24 +299,34 @@ void GenVecAnalyzer::medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQd
 				// this condition makes sure that the firstQdM1 (firstQdM2) and firstQsM1 (firstQsM2) came from the same mediator.
 				// The labels 1 and 2 have no significance other than making sure that we get the correct pairings of dark and SM quarks from the mediators.
 				if(secondDM == false){
+					entry.Mediator1 = part->p4();
+					entry.DarkQuark1 = dau->p4();
 					firstQdM1 = dau;
 					secondDM = true;
 				}
-				else firstQdM2 = dau;
+				else {
+					entry.Mediator2 = part->p4();
+					entry.DarkQuark2 = dau->p4();
+					firstQdM2 = dau;
+				}
 			}
 			// Here we are collecting the SM quarks from the mediators which assigning them to firstQsM1 and firstQsM2 depending on which mediator the quarks came from.
 			else if(isParticle(SMQuarkIDs_,dau)){
 				if(secondSM == false){
+					entry.SMQuark1 = dau->p4();
 					firstQsM1 = dau;
 					secondSM = true;
 				}
-				else firstQsM2 = dau;
+				else {
+					entry.SMQuark2 = dau->p4();
+					firstQsM2 = dau;
+				}
 			}
 		}
 	}
 }
 
-void GenVecAnalyzer::firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) const {
+void GenVecAnalyzer::firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM) {
 	if(isParticle(DarkFirstIDs_,part)){
 		CandPtr parent = part->mother(0);
 		if(isParticle(DarkFirstIDs_,parent)) firstDark(parent, firstMd, firstQdM1, firstQdM2, firstQsM1, firstQsM2, secondDM, secondSM);
