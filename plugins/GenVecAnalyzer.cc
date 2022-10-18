@@ -100,6 +100,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			double Mmc;
 			double Mjj;
 			double MT;
+			double MTx;
 			double MT2;
 			double MAOS;
 			LorentzVector Met1;
@@ -217,6 +218,7 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Mmc", &entry.Mmc, "Mmc/D");
 	tree->Branch("Mjj", &entry.Mjj, "Mjj/D");
 	tree->Branch("MT", &entry.MT, "MT/D");
+	tree->Branch("MTx", &entry.MTx, "MTx/D");
 	tree->Branch("MT2", &entry.MT2, "MT2/D");
 	tree->Branch("MAOS", &entry.MAOS, "MAOS/D");
 	tree->Branch("Met1", "Met1", &entry.Met1, 32000, 99);
@@ -485,6 +487,8 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.Mmc = (vjj + entry.Invis1 + entry.Invis2).mass();
 	entry.Mjj = vjj.mass();
 	entry.MT = TransverseMass(vjj.px(),vjj.py(),vjj.mass(),entry.Met.px(),entry.Met.py(),0.0);
+	//for boosted case
+	entry.MTx = TransverseMass(entry.Jet2.px(),entry.Jet2.py(),entry.Jet2.mass(),entry.Met.px(),entry.Met.py(),0.0);
 
 	//compute MT2 and MAOS
 	double METx = i_met.px();
