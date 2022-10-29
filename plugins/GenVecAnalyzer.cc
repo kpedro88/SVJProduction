@@ -22,6 +22,7 @@
 #include "DataFormats/Math/interface/deltaR.h"
 #include "DataFormats/Math/interface/LorentzVector.h"
 #include "SimDataFormats/GeneratorProducts/interface/GenLumiInfoHeader.h"
+#include "SimDataFormats/GeneratorProducts/interface/GenEventInfoProduct.h"
 
 //ROOT headers
 #include <TTree.h>
@@ -116,6 +117,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			double rinv;
 			double alpha;
 			double yukawa;
+			double Weight;
 		};
 	
 	private:
@@ -151,9 +153,11 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 		edm::EDGetTokenT<vector<reco::GenJet>> tok_jet;
 		edm::EDGetTokenT<vector<reco::GenParticle>> tok_part;
 		edm::EDGetTokenT<GenLumiInfoHeader> tok_scan;
+		edm::EDGetTokenT<GenEventInfoProduct> tok_weight;
 		std::map<std::string,double> signalParameters_;
 		PidSet DarkSMediatorIDs_, DarkTMediatorIDs_, DarkQuarkIDs_, DarkHadronIDs_, DarkGluonIDs_, DarkStableIDs_, DarkFirstIDs_, SMQuarkIDs_;
 		double coneSize_{0.8};
+		bool signal;
 };
 
 //
@@ -165,13 +169,15 @@ GenVecAnalyzer::GenVecAnalyzer(const edm::ParameterSet& iConfig) :
 	tok_jet(consumes<vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("JetTag"))),
 	tok_part(consumes<vector<reco::GenParticle>>(iConfig.getParameter<edm::InputTag>("PartTag"))),
 	tok_scan(consumes<GenLumiInfoHeader,edm::InLumi>(edm::InputTag("generator"))),
+	tok_weight(consumes<GenEventInfoProduct>(edm::InputTag("generator"))),
 	DarkSMediatorIDs_{4900023},
 	DarkTMediatorIDs_{4900001,4900002,4900003,4900004,4900005,4900006},
 	DarkQuarkIDs_{4900101,4900102},
 	DarkHadronIDs_{4900111,4900113,4900211,4900213},
 	DarkGluonIDs_{4900021},
 	DarkStableIDs_{51,52,53},
-	SMQuarkIDs_{1,2,3,4,5,6}
+	SMQuarkIDs_{1,2,3,4,5,6},
+    signal(iConfig.getParameter<bool>("signal"))
 {
 	usesResource("TFileService");
 	const auto& model = iConfig.getParameter<std::string>("model");
@@ -235,6 +241,7 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("rinv", &entry.rinv, "rinv/D");
 	tree->Branch("alpha", &entry.alpha, "alpha/D");
 	tree->Branch("yukawa", &entry.yukawa, "yukawa/D");
+	tree->Branch("Weight", &entry.Weight, "Weight/D");
 }
 
 //parse GenLumiInfo for SVJ
@@ -274,6 +281,7 @@ void GenVecAnalyzer::getSVJComment(const std::string& model){
 
 void GenVecAnalyzer::beginLuminosityBlock(edm::LuminosityBlock const& iLumi, edm::EventSetup const& iSetup)
 {
+	if(!signal) return;
 	edm::Handle<GenLumiInfoHeader> gen_header;
 	iLumi.getByToken(tok_scan, gen_header);
 	getSVJComment(*gen_header);
@@ -389,7 +397,7 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	iEvent.getByToken(tok_jet,h_jet);
 
 	edm::Handle<vector<reco::GenParticle>> h_part;
-	iEvent.getByToken(tok_part,h_part);
+	if(signal) iEvent.getByToken(tok_part,h_part);
 
 	int jet_counter = 0;
 	entry.Nconst1 = 0;
@@ -413,6 +421,11 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 		++jet_counter;
 	}
 
+	const auto& i_met = h_met->front();
+	entry.Met = i_met.p4();
+	double METx = i_met.px();
+	double METy = i_met.py();
+
 	const double jet_radius = 0.8;
 
 	entry.Ninv = 0;
@@ -422,66 +435,87 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.Nvis1 = 0;
 	entry.Nvis2 = 0;
 
-    //t-channel jet categorization
-    //naming scheme: dark particles Pd, SM particles Ps; P = D (generic daughters), Q (quarks), G (gluons), M (mediators)
-    CandSet firstMd;
-    CandPtr firstQdM1, firstQdM2, firstQsM1, firstQsM2;
-    bool secondDM = false, secondSM = false;
-    std::vector<const reco::GenJet*> dQM1Js,dQM2Js,SMM1Js,SMM2Js;
+	if(signal){
+		//t-channel jet categorization
+		//naming scheme: dark particles Pd, SM particles Ps; P = D (generic daughters), Q (quarks), G (gluons), M (mediators)
+		CandSet firstMd;
+		CandPtr firstQdM1, firstQdM2, firstQsM1, firstQsM2;
+		bool secondDM = false, secondSM = false;
+		std::vector<const reco::GenJet*> dQM1Js,dQM2Js,SMM1Js,SMM2Js;
 
-	for(const auto& i_part : *(h_part.product())){
-		//todo: for unstable dark hadrons, can actually make list of all that produced genjet constituents
-		if(isParticle(DarkHadronIDs_,i_part) and i_part.numberOfDaughters()>0){
-			bool invis = isParticle(DarkStableIDs_,i_part.daughter(0));
-			if(invis) ++entry.Ninv;
-			else ++entry.Nvis;
-			double dr1 = 1e10, dr2 = 1e10;
-			if(jet_counter>0) dr1 = reco::deltaR(entry.Jet1,i_part.p4());
-			if(jet_counter>1) dr2 = reco::deltaR(entry.Jet2,i_part.p4());
-			if(dr1 < dr2 and dr1 < jet_radius){
-				if(invis){
-					entry.Invis1 += i_part.p4();
-					++entry.Ninv1;
+		for(const auto& i_part : *(h_part.product())){
+			//todo: for unstable dark hadrons, can actually make list of all that produced genjet constituents
+			if(isParticle(DarkHadronIDs_,i_part) and i_part.numberOfDaughters()>0){
+				bool invis = isParticle(DarkStableIDs_,i_part.daughter(0));
+				if(invis) ++entry.Ninv;
+				else ++entry.Nvis;
+				double dr1 = 1e10, dr2 = 1e10;
+				if(jet_counter>0) dr1 = reco::deltaR(entry.Jet1,i_part.p4());
+				if(jet_counter>1) dr2 = reco::deltaR(entry.Jet2,i_part.p4());
+				if(dr1 < dr2 and dr1 < jet_radius){
+					if(invis){
+						entry.Invis1 += i_part.p4();
+						++entry.Ninv1;
+					}
+					else ++entry.Nvis1;
 				}
-				else ++entry.Nvis1;
-			}
-			else if(dr2 < dr1 and dr2 < jet_radius){
-				if(invis){
-					entry.Invis2 += i_part.p4();
-					++entry.Ninv2;
+				else if(dr2 < dr1 and dr2 < jet_radius){
+					if(invis){
+						entry.Invis2 += i_part.p4();
+						++entry.Ninv2;
+					}
+					else ++entry.Nvis2;
 				}
-				else ++entry.Nvis2;
+			}
+
+			//get truth: last zprime, first dark quarks
+			if(isParticle(DarkSMediatorIDs_,i_part) and i_part.isLastCopy()){
+				entry.Zprime = i_part.p4();
+				if(i_part.numberOfDaughters()>0) entry.DarkQuark1 = i_part.daughter(0)->p4();
+				if(i_part.numberOfDaughters()>1) entry.DarkQuark2 = i_part.daughter(1)->p4();
+				break;
+			}
+
+			//t-channel loop over gen particles
+			firstDark(&i_part, firstMd, firstQdM1, firstQdM2, firstQsM1, firstQsM2, secondDM, secondSM);
+		}
+
+		//t-channel loop over gen jets
+		vector<CandPtr> firsts{firstQdM1,firstQdM2,firstQsM1,firstQsM2};
+		vector<int> jetIndex(firsts.size(),-1);
+		if(firstMd.size()==2){
+			jetIndex = matchJetPart(*(h_jet.product()),firsts);
+			entry.PairMT2ID = vector<int>(h_jet->size(),0);
+			for(unsigned p = 0; p < jetIndex.size(); ++p){
+				if(jetIndex[p]>-1) entry.PairMT2ID[jetIndex[p]] = p+1;
 			}
 		}
-
-		//get truth: last zprime, first dark quarks
-		if(isParticle(DarkSMediatorIDs_,i_part) and i_part.isLastCopy()){
-			entry.Zprime = i_part.p4();
-			if(i_part.numberOfDaughters()>0) entry.DarkQuark1 = i_part.daughter(0)->p4();
-			if(i_part.numberOfDaughters()>1) entry.DarkQuark2 = i_part.daughter(1)->p4();
-			break;
+		else {
+			entry.PairMT2ID = std::vector<int>(h_jet->size(),0);
 		}
 
-		//t-channel loop over gen particles
-		firstDark(&i_part, firstMd, firstQdM1, firstQdM2, firstQsM1, firstQsM2, secondDM, secondSM);
-	}
-
-	//t-channel loop over gen jets
-	vector<CandPtr> firsts{firstQdM1,firstQdM2,firstQsM1,firstQsM2};
-	vector<int> jetIndex(firsts.size(),-1);
-	if(firstMd.size()==2){
-		jetIndex = matchJetPart(*(h_jet.product()),firsts);
-		entry.PairMT2ID = vector<int>(h_jet->size(),0);
-		for(unsigned p = 0; p < jetIndex.size(); ++p){
-			if(jetIndex[p]>-1) entry.PairMT2ID[jetIndex[p]] = p+1;
+		//compute MT2 for t-channel (paired jets)
+		bool geqOneJet1 = jetIndex[0] >= 0 or jetIndex[2] >= 0;
+		bool geqOneJet2 = jetIndex[1] >= 0 or jetIndex[3] >= 0;
+		if(geqOneJet1 and geqOneJet2){
+			// using the highest pT jet if more than one jet contains the same particle
+			LorentzVector FJet0;
+			if(jetIndex[0] >= 0) FJet0 += h_jet->at(jetIndex[0]).p4();
+			if(jetIndex[2] >= 0) FJet0 += h_jet->at(jetIndex[2]).p4();
+			LorentzVector FJet1;
+			if(jetIndex[1] >= 0) FJet1 += h_jet->at(jetIndex[1]).p4();
+			if(jetIndex[3] >= 0) FJet1 += h_jet->at(jetIndex[3]).p4();
+			entry.PairMT2 = asymm_mt2_lester_bisect::get_mT2(
+				FJet0.M(), FJet0.Px(), FJet0.Py(),
+				FJet1.M(), FJet1.Px(), FJet1.Py(),
+				METx, METy, 0.0, 0.0, 0
+			);
+		}
+		else
+		{
+			entry.PairMT2 = (!geqOneJet1 and !geqOneJet2) ? 0 : (!geqOneJet1 ? -1 : -2);
 		}
 	}
-	else {
-		entry.PairMT2ID = std::vector<int>(h_jet->size(),0);
-	}
-
-	const auto& i_met = h_met->front();
-	entry.Met = i_met.p4();
 
 	//compute mass variables
 	auto vjj = entry.Jet1 + entry.Jet2;
@@ -494,8 +528,6 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	entry.Meff = entry.Jet2.pt()+entry.Met.pt();
 
 	//compute MT2 and MAOS
-	double METx = i_met.px();
-	double METy = i_met.py();
 	entry.MT2 = asymm_mt2_lester_bisect::get_mT2(
 		entry.Jet1.mass(), entry.Jet1.px(), entry.Jet1.py(),
 		entry.Jet2.mass(), entry.Jet2.px(), entry.Jet2.py(),
@@ -526,28 +558,6 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 
 	//construct invariant mass of parent
 	entry.MAOS = (entry.Jet1+entry.Jet2+entry.Met1+entry.Met2).mass();
-
-	//compute MT2 for t-channel (paired jets)
-	bool geqOneJet1 = jetIndex[0] >= 0 or jetIndex[2] >= 0;
-	bool geqOneJet2 = jetIndex[1] >= 0 or jetIndex[3] >= 0;
-	if(geqOneJet1 and geqOneJet2){
-		// using the highest pT jet if more than one jet contains the same particle
-		LorentzVector FJet0;
-		if(jetIndex[0] >= 0) FJet0 += h_jet->at(jetIndex[0]).p4();
-		if(jetIndex[2] >= 0) FJet0 += h_jet->at(jetIndex[2]).p4();
-		LorentzVector FJet1;
-		if(jetIndex[1] >= 0) FJet1 += h_jet->at(jetIndex[1]).p4();
-		if(jetIndex[3] >= 0) FJet1 += h_jet->at(jetIndex[3]).p4();
-		entry.PairMT2 = asymm_mt2_lester_bisect::get_mT2(
-			FJet0.M(), FJet0.Px(), FJet0.Py(),
-			FJet1.M(), FJet1.Px(), FJet1.Py(),
-			METx, METy, 0.0, 0.0, 0
-		);
-	}
-	else
-	{
-		entry.PairMT2 = (!geqOneJet1 and !geqOneJet2) ? 0 : (!geqOneJet1 ? -1 : -2);
-	}
 
 	//"reco-level" MT2: find pairs of jets with most similar invariant mass values
 	//based on: https://github.com/cms-svj/t-channel_Analysis/blob/2592bd5a5b313747f51d59bd1dc10842b28d6f64/utils/utility.py#L99
@@ -597,6 +607,13 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 		entry.alpha = 0.;
 		entry.yukawa = 0.;
 	}
+
+	entry.Weight = 1;
+	if(!signal){
+		edm::Handle<GenEventInfoProduct> h_weight;
+		iEvent.getByToken(tok_weight,h_weight);
+		entry.Weight = h_weight->weight();
+	}
 	
 	//fill tree
 	tree->Fill();
@@ -609,6 +626,7 @@ void GenVecAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descriptio
 	desc.add<edm::InputTag>("JetTag",edm::InputTag("ak8GenJetsNoNu"));
 	desc.add<edm::InputTag>("PartTag",edm::InputTag("genParticles"));
 	desc.add<std::string>("model","");
+	desc.add<bool>("signal",true);
 	
 	descriptions.add("GenVecAnalyzer",desc);
 }
