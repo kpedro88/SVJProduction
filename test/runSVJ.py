@@ -42,7 +42,7 @@ if len(_inname)>0:
         process.externalLHEProducer.nEvents = cms.untracked.uint32(options.maxEvents)
 if process.source.type_()=='EmptySource':
     process.source.firstEvent = cms.untracked.uint32((options.part-1)*options.maxEvents+1)
-    if len(options.scan)>0: process.source.numberEventsInLuminosityBlock = cms.untracked.uint32(100)
+    if len(options.scan)>0 and options.signal: process.source.numberEventsInLuminosityBlock = cms.untracked.uint32(100)
 
 # output settings
 oprocess = process if (not hasattr(process,'subProcesses') or len(process.subProcesses)==0) else process.subProcesses[-1].process()
@@ -138,6 +138,10 @@ if options.signal:
             particleIDs = cms.vint32(4900001,4900002,4900003,4900004,4900005,4900006),
         )
         process.ProductionFilterSequence.insert(0,process.nmedfilter)
+else:
+    if len(options.scan)>0:
+        if hasattr(process,'generator'):
+            process.generator = getattr(__import__("SVJ.Production."+options.scan+"_cff",fromlist=["generator"]),"generator")
 
 if hasattr(process,'generator') and hasattr(process.generator,'maxEventsToPrint'):
     process.generator.maxEventsToPrint = options.printEvents
