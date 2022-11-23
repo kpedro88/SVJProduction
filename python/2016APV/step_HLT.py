@@ -2,7 +2,7 @@
 # using: 
 # Revision: 1.19 
 # Source: /local/reps/CMSSW/CMSSW/Configuration/Applications/python/ConfigBuilder.py,v 
-# with command line options: step1 --mc --eventcontent RAWSIM --outputCommand keep *_mix_*_*,keep *_genPUProtons_*_* --datatier GEN-SIM-RAW --inputCommands keep *,drop *_*_BMTF_*,drop *PixelFEDChannel*_*_*_* --conditions 80X_mcRun2_asymptotic_2016_TrancheIV_v6 --customise_commands process.source.bypassVersionCheck = cms.untracked.bool(True) --step HLT:25ns15e33_v4 --nThreads 8 --geometry DB:Extended --era Run2_2016 --filein file:step-1.root --fileout file:step0.root --python_filename python/2016APV/step4_HLT.py --no_exec
+# with command line options: step1 --mc --eventcontent RAWSIM --outputCommand keep *_mix_*_*,keep *_genPUProtons_*_* --datatier GEN-SIM-RAW --inputCommands keep *,drop *_*_BMTF_*,drop *PixelFEDChannel*_*_*_* --conditions 80X_mcRun2_asymptotic_2016_TrancheIV_v6 --customise_commands process.source.bypassVersionCheck = cms.untracked.bool(True) --custom_conditions L1Menu_Collisions2016_v9_m2_xml,L1TUtmTriggerMenuRcd --step HLT:25ns15e33_v4pt2 --nThreads 8 --geometry DB:Extended --era Run2_2016 --filein file:step-1.root --fileout file:step0.root --python_filename python/2016APV/step_HLT.py --no_exec
 import FWCore.ParameterSet.Config as cms
 
 from Configuration.StandardSequences.Eras import eras
@@ -17,7 +17,7 @@ process.load('Configuration.EventContent.EventContent_cff')
 process.load('SimGeneral.MixingModule.mixNoPU_cfi')
 process.load('Configuration.StandardSequences.GeometryRecoDB_cff')
 process.load('Configuration.StandardSequences.MagneticField_cff')
-process.load('HLTrigger.Configuration.HLT_25ns15e33_v4_cff')
+process.load('HLTrigger.Configuration.HLT_25ns15e33_v4pt2_cff')
 process.load('Configuration.StandardSequences.EndOfProcess_cff')
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 
@@ -63,7 +63,7 @@ process.RAWSIMoutput = cms.OutputModule("PoolOutputModule",
 
 # Other statements
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, '80X_mcRun2_asymptotic_2016_TrancheIV_v6', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '80X_mcRun2_asymptotic_2016_TrancheIV_v6', 'L1Menu_Collisions2016_v9_m2_xml,L1TUtmTriggerMenuRcd')
 process.RAWSIMoutput.outputCommands.append('keep *_mix_*_*')
 process.RAWSIMoutput.outputCommands.append('keep *_genPUProtons_*_*')
 

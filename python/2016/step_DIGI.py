@@ -2,7 +2,7 @@
 # using: 
 # Revision: 1.19 
 # Source: /local/reps/CMSSW/CMSSW/Configuration/Applications/python/ConfigBuilder.py,v 
-# with command line options: step1 --mc --eventcontent PREMIXRAW --runUnscheduled --datatier GEN-SIM-DIGI --conditions 106X_mcRun2_asymptotic_v13 --step DIGI,DATAMIX,L1,DIGI2RAW --procModifiers premix_stage2 --nThreads 8 --geometry DB:Extended --datamix PreMix --era Run2_2016 --filein file:step-1.root --fileout file:step0.root --pileup_input pileup.root --python_filename python/2016/step_DIGI.py --no_exec
+# with command line options: step1 --mc --eventcontent PREMIXRAW --runUnscheduled --datatier GEN-SIM-DIGI --conditions 106X_mcRun2_asymptotic_v13 --custom_conditions L1Menu_Collisions2016_v9_m2_xml,L1TUtmTriggerMenuRcd --step DIGI,DATAMIX,L1,DIGI2RAW --procModifiers premix_stage2 --nThreads 8 --geometry DB:Extended --datamix PreMix --era Run2_2016 --filein file:step-1.root --fileout file:step0.root --pileup_input pileup.root --python_filename python/2016/step_DIGI.py --no_exec
 import FWCore.ParameterSet.Config as cms
 
 from Configuration.Eras.Era_Run2_2016_cff import Run2_2016
@@ -83,7 +83,7 @@ process.PREMIXRAWoutput = cms.OutputModule("PoolOutputModule",
 # Other statements
 process.mixData.input.fileNames = cms.untracked.vstring(['pileup.root'])
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, '106X_mcRun2_asymptotic_v13', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '106X_mcRun2_asymptotic_v13', 'L1Menu_Collisions2016_v9_m2_xml,L1TUtmTriggerMenuRcd')
 
 # Path and EndPath definitions
 process.digitisation_step = cms.Path(process.pdigi)
