@@ -111,6 +111,8 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			vector<int> PairMT2ID;
 			double PairMT2Reco;
 			vector<int> PairMT2RecoID;
+			double PairMT2RecoDR;
+			vector<int> PairMT2RecoDRID;
 			int nMediator;
 			double mMediator;
 			double mDark;
@@ -235,6 +237,8 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("PairMT2ID", "PairMT2ID", &entry.PairMT2ID, 32000, 99);
 	tree->Branch("PairMT2Reco", &entry.PairMT2Reco, "PairMT2Reco/D");
 	tree->Branch("PairMT2RecoID", "PairMT2RecoID", &entry.PairMT2RecoID, 32000, 99);
+	tree->Branch("PairMT2RecoDR", &entry.PairMT2RecoDR, "PairMT2RecoDR/D");
+	tree->Branch("PairMT2RecoDRID", "PairMT2RecoDRID", &entry.PairMT2RecoDRID, 32000, 99);
 	tree->Branch("nMediator", &entry.nMediator, "nMediator/I");
 	tree->Branch("mMediator", &entry.mMediator, "mMediator/D");
 	tree->Branch("mDark", &entry.mDark, "mDark/D");
@@ -560,33 +564,58 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 
 	//"reco-level" MT2: find pairs of jets with most similar invariant mass values
 	//based on: https://github.com/cms-svj/t-channel_Analysis/blob/2592bd5a5b313747f51d59bd1dc10842b28d6f64/utils/utility.py#L99
+	//OR minimize DR = |DR1-0.8|+|DR2-0.8| as in paired dijet searches
 	if(jet_counter>=4){
 		vector<vector<int>> combos{{0,1,2,3},{0,2,1,3},{0,3,1,2}};
 		vector<LorentzVector*> jets{&entry.Jet1,&entry.Jet2,&entry.Jet3,&entry.Jet4};
-		int min_index = -1;
-		double min_val = 1e10;
+		int min_index_1 = -1;
+		double min_val_1 = 1e10;
+		int min_index_2 = -1;
+		double min_val_2 = 1e10;
 		for(unsigned c = 0; c < combos.size(); ++c){
 			const auto& combo = combos[c];
 			vector<LorentzVector*> _jets{jets[combo[0]],jets[combo[1]],jets[combo[2]],jets[combo[3]]};
-			double diff = std::abs((*_jets[0]+*_jets[1]).mass() - (*_jets[2]+*_jets[3]).mass());
-			if(diff<min_val){
-				min_index = c;
-				min_val = diff;
+			double diff_1 = std::abs((*_jets[0]+*_jets[1]).mass() - (*_jets[2]+*_jets[3]).mass());
+			if(diff_1<min_val_1){
+				min_index_1 = c;
+				min_val_1 = diff_1;
+			}
+			double diff_2 = std::abs(reco::deltaR(*_jets[0],*_jets[1])-0.8)+std::abs(reco::deltaR(*_jets[2],*_jets[3])-0.8);
+			if(diff_2<min_val_2){
+				min_index_2 = c;
+				min_val_2 = diff_2;
 			}
 		}
-		const auto& combo = combos[min_index];
-		auto FJet0 = *jets[combo[0]] + *jets[combo[1]];
-		auto FJet1 = *jets[combo[2]] + *jets[combo[3]];
+		const auto& combo_1 = combos[min_index_1];
+		auto FJet0 = *jets[combo_1[0]] + *jets[combo_1[1]];
+		auto FJet1 = *jets[combo_1[2]] + *jets[combo_1[3]];
 		entry.PairMT2Reco = asymm_mt2_lester_bisect::get_mT2(
 			FJet0.M(), FJet0.Px(), FJet0.Py(),
 			FJet1.M(), FJet1.Px(), FJet1.Py(),
 			METx, METy, 0.0, 0.0, 0
 		);
-		entry.PairMT2RecoID = combo;
+		entry.PairMT2RecoID = combo_1;
+		if(min_index_2 != min_index_1){
+			const auto& combo_2 = combos[min_index_2];
+			auto FJet2 = *jets[combo_2[0]] + *jets[combo_2[1]];
+			auto FJet3 = *jets[combo_2[2]] + *jets[combo_2[3]];
+			entry.PairMT2RecoDR = asymm_mt2_lester_bisect::get_mT2(
+				FJet2.M(), FJet2.Px(), FJet2.Py(),
+				FJet3.M(), FJet3.Px(), FJet3.Py(),
+				METx, METy, 0.0, 0.0, 0
+			);
+			entry.PairMT2RecoDRID = combo_2;
+		}
+		else {
+			entry.PairMT2RecoDR = entry.PairMT2Reco;
+			entry.PairMT2RecoDRID = entry.PairMT2RecoDRID;
+		}
 	}
 	else {
 		entry.PairMT2RecoID = std::vector<int>(jet_counter,0);
 		entry.PairMT2Reco = 0;
+		entry.PairMT2RecoDRID = std::vector<int>(jet_counter,0);
+		entry.PairMT2RecoDR = 0;
 	}
 
 	//check signal scan info
