@@ -473,7 +473,6 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 				entry.Zprime = i_part.p4();
 				if(i_part.numberOfDaughters()>0) entry.DarkQuark1 = i_part.daughter(0)->p4();
 				if(i_part.numberOfDaughters()>1) entry.DarkQuark2 = i_part.daughter(1)->p4();
-				break;
 			}
 
 			//t-channel loop over gen particles
