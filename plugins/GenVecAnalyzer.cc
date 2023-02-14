@@ -105,6 +105,9 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			double MT2;
 			double MAOS;
 			double Meff;
+			double Girth1;
+			double Girth2;
+			double Girth3;
 			LorentzVector Met1;
 			LorentzVector Met2;
 			double PairMT2;
@@ -141,6 +144,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 		void firstDark(CandPtr part, CandSet& firstMd, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM);
 		void medDecay(CandPtr part, CandPtr& firstQdM1, CandPtr& firstQdM2, CandPtr& firstQsM1, CandPtr& firstQsM2, bool& secondDM, bool& secondSM);
 		std::vector<int> matchJetPart(const vector<reco::GenJet>& jets, const vector<CandPtr>& parts) const;
+		double girth(const reco::GenJet& jet) const;
 
 		// ----------member data ---------------------------
 		edm::Service<TFileService> fs;
@@ -229,6 +233,9 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("MT2", &entry.MT2, "MT2/D");
 	tree->Branch("MAOS", &entry.MAOS, "MAOS/D");
 	tree->Branch("Meff", &entry.Meff, "Meff/D");
+	tree->Branch("Girth1", &entry.Girth1, "Girth1/D");
+	tree->Branch("Girth2", &entry.Girth2, "Girth2/D");
+	tree->Branch("Girth3", &entry.Girth3, "Girth3/D");
 	tree->Branch("Met1", "Met1", &entry.Met1, 32000, 99);
 	tree->Branch("Met2", "Met2", &entry.Met2, 32000, 99);
 	tree->Branch("PairMT2", &entry.PairMT2, "PairMT2/D");
@@ -385,6 +392,18 @@ std::vector<int> GenVecAnalyzer::matchJetPart(const vector<reco::GenJet>& jets, 
   return jetIndex;
 }
 
+double GenVecAnalyzer::girth(const reco::GenJet& jet) const {
+	double girth_val = 0;
+	for(unsigned k = 0; k < jet.numberOfDaughters(); ++k){
+		const reco::Candidate* part = jet.daughter(k);
+		float dR = reco::deltaR(jet.p4(),part->p4());
+		float pT = part->pt();
+		girth_val += pT*dR;
+	}
+	girth_val /= jet.pt();
+	return girth_val;
+}
+
 // ------------ method called on each new Event  ------------
 void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
@@ -402,17 +421,23 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 	int jet_counter = 0;
 	entry.Nconst1 = 0;
 	entry.Nconst2 = 0;
+	entry.Girth1 = 0;
+	entry.Girth2 = 0;
+	entry.Girth3 = 0;
 	for(const auto& i_jet : *(h_jet.product())){
 		if(jet_counter==0){
 			entry.Jet1 = i_jet.p4();
 			entry.Nconst1 = i_jet.numberOfDaughters();
+			entry.Girth1 = girth(i_jet);
 		}
 		else if(jet_counter==1){
 			entry.Jet2 = i_jet.p4();
 			entry.Nconst2 = i_jet.numberOfDaughters();
+			entry.Girth2 = girth(i_jet);
 		}
 		else if(jet_counter==2){
 			entry.Jet3 = i_jet.p4();
+			entry.Girth3 = girth(i_jet);
 		}
 		else if(jet_counter==3){
 			entry.Jet4 = i_jet.p4();
