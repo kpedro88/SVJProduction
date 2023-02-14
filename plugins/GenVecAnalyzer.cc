@@ -86,6 +86,7 @@ class GenVecAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources,edm
 			LorentzVector Jet2;
 			LorentzVector Jet3;
 			LorentzVector Jet4;
+			LorentzVector Invis;
 			LorentzVector Invis1;
 			LorentzVector Invis2;
 			LorentzVector Met;
@@ -214,6 +215,7 @@ void GenVecAnalyzer::beginJob()
 	tree->Branch("Jet2", "Jet2", &entry.Jet2, 32000, 99);
 	tree->Branch("Jet3", "Jet3", &entry.Jet3, 32000, 99);
 	tree->Branch("Jet4", "Jet4", &entry.Jet4, 32000, 99);
+	tree->Branch("Invis", "Invis", &entry.Invis, 32000, 99);
 	tree->Branch("Invis1", "Invis1", &entry.Invis1, 32000, 99);
 	tree->Branch("Invis2", "Invis2", &entry.Invis2, 32000, 99);
 	tree->Branch("Met", "Met", &entry.Met, 32000, 99);
@@ -472,7 +474,10 @@ void GenVecAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 			//todo: for unstable dark hadrons, can actually make list of all that produced genjet constituents
 			if(isParticle(DarkHadronIDs_,i_part) and i_part.numberOfDaughters()>0){
 				bool invis = isParticle(DarkStableIDs_,i_part.daughter(0));
-				if(invis) ++entry.Ninv;
+				if(invis) {
+					++entry.Ninv;
+					entry.Invis += i_part.p4();
+				}
 				else ++entry.Nvis;
 				double dr1 = 1e10, dr2 = 1e10;
 				if(jet_counter>0) dr1 = reco::deltaR(entry.Jet1,i_part.p4());
