@@ -65,6 +65,12 @@ class DijetAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> {
 		TTree* tree;
 		//for tree branches
 		GenNtuple entry;
+		//cuts
+		double pt;
+		double eta;
+		unsigned njet;
+		double radius;
+		double maxdeta;
 
 		//tokens
 		edm::EDGetTokenT<vector<reco::GenJet>> tok_jet, tok_jet_nonu;
@@ -75,6 +81,11 @@ class DijetAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> {
 //
 DijetAnalyzer::DijetAnalyzer(const edm::ParameterSet& iConfig) :
 	tree(nullptr),
+	pt(iConfig.getParameter<double>("pt")),
+	eta(iConfig.getParameter<double>("eta")),
+	njet(iConfig.getParameter<unsigned>("njet")),
+	radius(iConfig.getParameter<double>("radius")),
+	maxdeta(iConfig.getParameter<double>("maxdeta")),
 	tok_jet(consumes<vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("JetTag"))),
 	tok_jet_nonu(consumes<vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("JetNoNuTag")))
 {
@@ -100,11 +111,6 @@ void DijetAnalyzer::beginJob()
 bool DijetAnalyzer::algorithm(const vector<reco::GenJet>& jets, LorentzVector& wideJet1, LorentzVector& wideJet2, double& mJJ)
 {
 	vector<LorentzVector> seedJets;
-	double pt = 30.;
-	double eta = 2.5;
-	unsigned njet = 2;
-	double radius = 1.1;
-	double maxdeta = 1.1;
 
 	if(jets.size()<njet) return false;
 	for(unsigned j = 0; j < njet; ++j){
@@ -166,6 +172,12 @@ void DijetAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
 void DijetAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
 	edm::ParameterSetDescription desc;
+
+	desc.add<double>("pt",30.);
+	desc.add<double>("eta",2.5);
+	desc.add<unsigned>("njet",2);
+	desc.add<double>("radius",1.1);
+	desc.add<double>("maxdeta",1.1);
 	desc.add<edm::InputTag>("JetTag",edm::InputTag("ak4GenJets"));
 	desc.add<edm::InputTag>("JetNoNuTag",edm::InputTag("ak4GenJetsNoNu"));
 
