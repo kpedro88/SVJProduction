@@ -49,11 +49,13 @@ private:
 
 	//members
 	std::string fileName;
+	unsigned precision;
 	edm::EDGetTokenT<reco::CandidatePtrVector> tok_part;
 };
 
 PrintGenParticles::PrintGenParticles(const edm::ParameterSet& iConfig) :
 	fileName(iConfig.getParameter<std::string>("fileName")),
+	precision(iConfig.getParameter<unsigned>("precision")),
 	tok_part(consumes<reco::CandidatePtrVector>(iConfig.getParameter<edm::InputTag>("PartTag")))
 {
 	//remove unnecessary prefix
@@ -78,6 +80,7 @@ void PrintGenParticles::analyze(const edm::Event& iEvent, const edm::EventSetup&
 	if(!file.is_open()){
 		throw cms::Exception("Could not open file: "+fname.str());
 	}
+	file << std::fixed << std::setprecision(precision);
 	for(const auto& i_part : *(h_part.product())){
 		printvec<double>({i_part->energy(),i_part->px(),i_part->py(),i_part->pz()},file,"\t");
 		file << std::endl;
@@ -89,6 +92,7 @@ void PrintGenParticles::fillDescriptions(edm::ConfigurationDescriptions& descrip
 	edm::ParameterSetDescription desc;
 	desc.add<edm::InputTag>("PartTag",edm::InputTag("genParticlesForJetsNoNu"));
 	desc.add<std::string>("fileName","");
+	desc.add<unsigned>("precision",6);
 
 	descriptions.add("PrintGenParticles",desc);
 }
