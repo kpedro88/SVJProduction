@@ -30,17 +30,19 @@ private:
   edm::propagate_const<HepMC::IO_GenEvent *> output_;
   edm::InputTag hepMCProduct_;
   edm::EDGetTokenT<edm::HepMCProduct> hepMCToken_;
+  std::string fileName_;
 };
 
 HepMCEventWriterNew::HepMCEventWriterNew(const edm::ParameterSet &params)
     : hepMCProduct_(params.getParameter<edm::InputTag>("hepMCProduct")),
-      hepMCToken_(consumes<edm::HepMCProduct>(hepMCProduct_))
+      hepMCToken_(consumes<edm::HepMCProduct>(hepMCProduct_)),
+      fileName_(params.getParameter<std::string>("fileName"))
  {}
 
 HepMCEventWriterNew::~HepMCEventWriterNew() {}
 
 void HepMCEventWriterNew::beginRun(const edm::Run &run, const edm::EventSetup &es) {
-  output_ = new HepMC::IO_GenEvent("GenEvent_ASCII.dat", std::ios::out);
+  output_ = new HepMC::IO_GenEvent(fileName_.c_str(), std::ios::out);
 }
 
 void HepMCEventWriterNew::endRun(const edm::Run &run, const edm::EventSetup &es) {

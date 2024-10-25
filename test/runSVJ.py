@@ -57,7 +57,13 @@ for iout,output in enumerate(options.output):
     if len(output)==0: continue
     if not hasattr(oprocess,output):
         raise ValueError("Unavailable output module: "+output)
-    getattr(oprocess,output).fileName = 'file:'+_outname.replace("outpre",options._outpre[iout])
+    output_module = getattr(oprocess,output)
+    outname_tmp = _outname.replace("outpre",options._outpre[iout])
+    if output_module.type_()=="HepMCEventWriterNew":
+        outname_tmp = outname_tmp.replace(".root",".dat")
+    else:
+        outname_tmp = "file:"+outname_tmp
+    output_module.fileName = outname_tmp
 
 # reset all random numbers to ensure statistically distinct but reproducible jobs
 from IOMC.RandomEngine.RandomServiceHelper import RandomNumberServiceHelper
