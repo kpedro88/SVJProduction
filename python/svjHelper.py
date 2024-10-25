@@ -89,8 +89,11 @@ class quarklist(object):
 
 class svjHelper(object):
     def __init__(self):
+        self.xsecs = {}
         with open(os.path.join(os.path.expandvars('$CMSSW_BASE'),'src/SVJ/Production/test/dict_xsec_Zprime.txt'),'r') as xfile:
-            self.xsecs = {int(xline.split('\t')[0]): float(xline.split('\t')[1]) for xline in xfile}
+            self.xsecs['s'] = {int(xline.split('\t')[0]): float(xline.split('\t')[1]) for xline in xfile}
+        with open(os.path.join(os.path.expandvars('$CMSSW_BASE'),'src/SVJ/Production/test/dict_xsec_tchan.txt'),'r') as xfile:
+            self.xsecs['t'] = {(int(xline.split('\t')[0]),int(xline.split('\t')[1])): float(xline.split('\t')[2]) for xline in xfile}
         self.quarks = quarklist()
         self.alphaName = ""
         self.generate = None
@@ -167,7 +170,7 @@ class svjHelper(object):
             self.boostvar = ""
 
         # get more parameters
-        self.xsec = self.getPythiaXsec(self.mMediator)
+        self.xsec = self.getPythiaXsec()
         self.mMin = self.mMediator-1
         self.mMax = self.mMediator+1
         self.mSqua = self.mDark/2. # dark scalar quark mass (also used for pTminFSR)
@@ -215,13 +218,16 @@ class svjHelper(object):
         return _outname
 
     # allow access to all xsecs
-    def getPythiaXsec(self,mMediator):
-        xsec = 1.0
-        # todo: get t-channel cross sections
-        if self.channel=="t": return xsec
+    def getPythiaXsec(self):
+        xsecs = self.xsecs[self.channel]
+        default = 1.0
+        # a function of mMediator and yukawa
+        if self.channel=="t":
+            return xsecs.get((self.mMediator, self.yukawa),default)
         # a function of mMediator
-        if mMediator in self.xsecs: xsec = self.xsecs[mMediator]
-        return xsec
+        elif self.channel=="s":
+            return xsecs.get(self.mMediator,default)
+        return default
 
     def invisibleDecay(self,mesonID,dmID):
         lines = ['{:d}:oneChannel = 1 {:g} 0 {:d} -{:d}'.format(mesonID,self.rinv,dmID,dmID)]
