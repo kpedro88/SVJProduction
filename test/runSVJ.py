@@ -59,17 +59,23 @@ for iout,output in enumerate(options.output):
         raise ValueError("Unavailable output module: "+output)
     output_module = getattr(oprocess,output)
     outname_tmp = _outname.replace("outpre",options._outpre[iout])
+    out_attr = "fileName"
     if output_module.type_()=="HepMCEventWriterNew":
         outname_tmp = outname_tmp.replace(".root",".dat")
+    elif output_module.type_()=="RivetAnalyzer":
+        out_attr = "OutputFile"
+        outname_tmp = outname_tmp.replace(".root",".aida")
+        output_module.CrossSection = _helper.xsec
     else:
         outname_tmp = "file:"+outname_tmp
-    output_module.fileName = outname_tmp
+    setattr(output_module, out_attr, outname_tmp)
 
 # reset all random numbers to ensure statistically distinct but reproducible jobs
 from IOMC.RandomEngine.RandomServiceHelper import RandomNumberServiceHelper
-randHelper = RandomNumberServiceHelper(process.RandomNumberGeneratorService)
-# CHANGED from maxEvents+part because concurrent LHE generation adds thread number to default random seed -> degeneracy
-randHelper.resetSeeds(int(str(options.part)+str(options.maxEvents)))
+if hasattr(process,'RandomNumberGeneratorService'):
+    randHelper = RandomNumberServiceHelper(process.RandomNumberGeneratorService)
+    # CHANGED from maxEvents+part because concurrent LHE generation adds thread number to default random seed -> degeneracy
+    randHelper.resetSeeds(int(str(options.part)+str(options.maxEvents)))
 
 if options.signal:
     if len(options.scan)>0:
